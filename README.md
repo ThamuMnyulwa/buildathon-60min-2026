@@ -12,6 +12,10 @@ Sentinel Health placed first in the buildathon.
 
 ![Sentinel Health first place leaderboard](docs/assets/buildathon-first-place.png)
 
+Buildathon room:
+
+![Southern Africa Buildathon presentation room](docs/assets/buildathon-presentation-room.png)
+
 ## Why This Matters
 
 Africa’s health systems are powered by frontline workers who carry enormous responsibility with limited infrastructure. Sentinel is designed around that reality:
