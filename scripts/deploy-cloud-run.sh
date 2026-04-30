@@ -58,13 +58,16 @@ else
 fi
 
 echo "Deploying backend Cloud Run service: ${BACKEND_SERVICE}"
-gcloud run deploy "${BACKEND_SERVICE}" \
-  --source backend \
-  --project "${PROJECT_ID}" \
-  --region "${REGION}" \
-  --allow-unauthenticated \
-  --set-env-vars "${BACKEND_ENV}" \
-  "${BACKEND_SECRET_ARGS[@]}"
+(
+  cd backend
+  gcloud run deploy "${BACKEND_SERVICE}" \
+    --source . \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --allow-unauthenticated \
+    --set-env-vars "${BACKEND_ENV}" \
+    "${BACKEND_SECRET_ARGS[@]}"
+)
 
 BACKEND_URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
   --project "${PROJECT_ID}" \
@@ -74,12 +77,15 @@ BACKEND_URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
 echo "Backend URL: ${BACKEND_URL}"
 
 echo "Deploying frontend Cloud Run service: ${FRONTEND_SERVICE}"
-gcloud run deploy "${FRONTEND_SERVICE}" \
-  --source frontend \
-  --project "${PROJECT_ID}" \
-  --region "${REGION}" \
-  --allow-unauthenticated \
-  --set-env-vars "BACKEND_URL=${BACKEND_URL}"
+(
+  cd frontend
+  gcloud run deploy "${FRONTEND_SERVICE}" \
+    --source . \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --allow-unauthenticated \
+    --set-env-vars "BACKEND_URL=${BACKEND_URL}"
+)
 
 FRONTEND_URL="$(gcloud run services describe "${FRONTEND_SERVICE}" \
   --project "${PROJECT_ID}" \

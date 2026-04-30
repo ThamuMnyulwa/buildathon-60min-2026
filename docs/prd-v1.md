@@ -22,7 +22,23 @@ One symptom intake produces two outcomes:
 - A CHV gets immediate decision support and clear next actions.
 - A district officer gets near-real-time visibility and alerting for potential outbreaks.
 
-## 4. Buildathon Goal (60-Minute Demo)
+## 4. About Sentinel Health
+
+Sentinel Health is built from a simple belief: Africa already has a powerful first-mile health network in Community Health Volunteers, but they need better tools at the exact moment a caregiver asks for help.
+
+The product does not try to replace clinicians, CHVs, or Ministry of Health systems. It strengthens them. A CHV captures symptoms once, receives safety-first guidance for the child in front of them, and automatically contributes to a district-level signal that can reveal an outbreak earlier than paper reporting.
+
+This matters in rural African settings because the biggest gaps are often time, distance, and visibility. A child with pneumonia, malaria, dehydration, or severe malnutrition can deteriorate before a facility visit happens. At the same time, district officers may not see clusters until manual reports arrive days later.
+
+Sentinel Health is designed to grow into:
+- a CHV-first mobile workflow for guided intake, voice capture, and offline sync
+- Gemini-supported decision support for non-critical cases, with deterministic escalation for danger signs
+- computer vision support for visible malnutrition screening when image capture is appropriate
+- BigQuery-powered district analytics for syndrome trends, ward burden, and alert review
+- integration with DHIS2/HMIS reporting so Ministry teams can act without duplicate data entry
+- a national surveillance layer that turns routine first-mile care into earlier public health intelligence
+
+## 5. Buildathon Goal (60-Minute Demo)
 
 Deliver a reliable, end-to-end prototype that demonstrates:
 - CHV case capture and triage
@@ -31,28 +47,28 @@ Deliver a reliable, end-to-end prototype that demonstrates:
 - On-device data capture with robust sync when connectivity returns
 - Deployment of frontend and backend as two Google Cloud Run services
 
-## 5. Users
+## 6. Users
 
-### 5.1 Primary User: CHV
+### 6.1 Primary User: CHV
 
 - Needs fast, guided intake
 - Needs confidence in next action
 - Works in low-connectivity settings
 
-### 5.2 Secondary User: District Health Officer
+### 6.2 Secondary User: District Health Officer
 
 - Needs live district view of submitted cases
 - Needs clear outbreak alert signals with thresholds
 - Needs fast acknowledgment and triage of district-level risk
 
-### 5.3 Beneficiary: Caregiver and Child
+### 6.3 Beneficiary: Caregiver and Child
 
 - Needs quicker escalation for danger signs
 - Needs trustworthy and explainable guidance at first point of contact
 
-## 6. Scope
+## 7. Scope
 
-### 6.1 Must Have (Demo Scope)
+### 7.1 Must Have (Demo Scope)
 
 1. Guided symptom intake for child cases
 2. IMCI danger-sign hard rules that bypass AI and trigger urgent referral
@@ -69,7 +85,7 @@ Deliver a reliable, end-to-end prototype that demonstrates:
    - `frontend` service
    - `backend` service
 
-### 6.2 Out of Scope (For This Demo)
+### 7.2 Out of Scope (For This Demo)
 
 - Production-grade EHR/HIS integration
 - Multi-language interface
@@ -77,7 +93,7 @@ Deliver a reliable, end-to-end prototype that demonstrates:
 - Clinical-grade certification workflow
 - Advanced geospatial mapping complexity
 
-## 7. Key User Stories
+## 8. Key User Stories
 
 ### US-01: Guided CHV Intake
 
@@ -103,9 +119,9 @@ As a district officer, I can see incoming cases, key metrics, and active alerts 
 
 As a district officer, I receive threshold-based outbreak alerts by syndrome and ward.
 
-## 8. Functional Requirements
+## 9. Functional Requirements
 
-### 8.1 Triage Flow
+### 9.1 Triage Flow
 
 - Capture case inputs (age, complaint, symptoms, vitals, danger signs)
 - Execute danger-sign rule engine first
@@ -117,7 +133,7 @@ As a district officer, I receive threshold-based outbreak alerts by syndrome and
   - rationale
   - disclaimer: decision support only
 
-### 8.2 Offline-First + Sync
+### 9.2 Offline-First + Sync
 
 - Persist unsynced cases on device
 - Assign local pending ID for each draft/submission
@@ -135,8 +151,13 @@ As a district officer, I receive threshold-based outbreak alerts by syndrome and
   - Synced
   - Sync Error (retrying)
 
-### 8.3 Dashboard
+### 9.3 Dashboard
 
+- Visual district command view:
+  - ward burden cards or heatmap
+  - urgency distribution
+  - syndrome/classification mix
+  - outbreak threshold progress
 - Case feed with latest submitted cases
 - KPI cards:
   - total cases today
@@ -144,7 +165,7 @@ As a district officer, I receive threshold-based outbreak alerts by syndrome and
   - active alerts
 - Alert panel with status and acknowledgment action
 
-### 8.4 Outbreak Detection
+### 9.4 Outbreak Detection
 
 - Rolling window detector (POC threshold model)
 - Trigger condition example:
@@ -156,7 +177,7 @@ As a district officer, I receive threshold-based outbreak alerts by syndrome and
   - threshold
   - detected time
 
-## 9. Google Product Strategy
+## 10. Google Product Strategy
 
 This project should clearly demonstrate use of Google products across AI and deployment:
 
@@ -168,7 +189,7 @@ This project should clearly demonstrate use of Google products across AI and dep
 - **Cloud Logging** and **Error Reporting** for runtime observability during demo and iteration
 - **Cloud Build** (optional but recommended) for image build and deploy automation
 
-## 10. Architecture (Demo-Oriented)
+## 11. Architecture (Demo-Oriented)
 
 ```mermaid
 flowchart LR
@@ -188,9 +209,9 @@ AlertFeed --> Dashboard
 DistrictOfficer[DistrictOfficer] --> Frontend
 ```
 
-## 11. Deployment Approach
+## 12. Deployment Approach
 
-### 11.1 Services
+### 12.1 Services
 
 - **Frontend Cloud Run service**
   - Hosts CHV and district UI
@@ -199,14 +220,14 @@ DistrictOfficer[DistrictOfficer] --> Frontend
   - Exposes triage and dashboard APIs
   - Runs rule engine, Gemini invocation, and outbreak detection logic
 
-### 11.2 Deployment Principles
+### 12.2 Deployment Principles
 
 - Independent service deploys for faster iteration
 - Clear environment configuration per service
 - Health endpoints for demo confidence
 - Safe fallback mode if Gemini endpoint is unavailable
 
-## 12. Demo Script (5 Minutes)
+## 13. Demo Script (5 Minutes)
 
 1. **Hook (30s):** Explain child mortality urgency and delayed outbreak visibility.
 2. **CHV normal case (60s):** Submit non-critical case, show Gemini-assisted response.
@@ -215,7 +236,7 @@ DistrictOfficer[DistrictOfficer] --> Frontend
 5. **District dashboard (60s):** Show new cases and outbreak alert panel update.
 6. **Close (30s):** One intake, two outcomes, deployed on Google Cloud Run.
 
-## 13. Success Metrics (Demo Phase)
+## 14. Success Metrics (Demo Phase)
 
 - Intake time: under 90s
 - Rule-engine response for danger-sign path: near-instant
@@ -223,21 +244,21 @@ DistrictOfficer[DistrictOfficer] --> Frontend
 - Sync recovery: queued offline case appears on dashboard after reconnect
 - Alert visibility: threshold breach appears in dashboard alert panel
 
-## 14. Risks and Mitigations
+## 15. Risks and Mitigations
 
 - **Connectivity instability:** Offline queue + sync retries + visible status.
 - **Model/API latency:** deterministic fallback response path for demo.
 - **Malformed model output:** strict schema validation and fallback action.
 - **Demo-time failure:** pre-seeded data and manual alert trigger path.
 
-## 15. Human-Centered Positioning
+## 16. Human-Centered Positioning
 
 - CHVs are not replaced; they are supported under pressure.
 - Safety-first escalation is deterministic for danger signs.
 - Recommendations are decision support, not autonomous diagnosis.
 - District officials gain earlier visibility to act before outbreaks grow.
 
-## 16. README Requirement (Root)
+## 17. README Requirement (Root)
 
 The root `README.md` must tell the story in this order:
 1. Human problem and why this matters now
@@ -247,7 +268,7 @@ The root `README.md` must tell the story in this order:
 5. Quickstart for local run and cloud deployment
 6. Demo flow and judging narrative
 
-## 17. Immediate Next Steps
+## 18. Immediate Next Steps
 
 1. Implement backend rule-first triage API contract
 2. Implement frontend intake and dashboard views

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import uuid
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib import request
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -508,6 +509,77 @@ def extract_case_with_gemini(transcript: str) -> dict[str, Any]:
         return fallback_extract_from_transcript(transcript)
 
 
+def extract_case_from_audio_with_gemini(audio_bytes: bytes, mime_type: str) -> dict[str, Any]:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {
+            "transcript": "",
+            "case": fallback_extract_from_transcript(""),
+            "model": "deterministic fallback",
+            "error": "GEMINI_API_KEY is not configured, so audio transcription is unavailable.",
+        }
+
+    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    prompt = (
+        "You are helping a Community Health Volunteer in an African rural health setting. "
+        "The audio may be noisy, accented, informal, and recorded on a phone. "
+        "First produce the best possible verbatim transcript. Then extract a pediatric intake form. "
+        "Prefer medically plausible interpretations: 'breathing fast' means fast_breathing, "
+        "'fits' or 'seizure' means convulsions, and 'not drinking' means unable_to_drink. "
+        "Return only JSON with this exact shape: "
+        "{\"transcript\":\"...\",\"case\":{\"patient_pseudo_id\":\"...\",\"age_months\":24,"
+        "\"sex\":\"F\",\"ward\":\"Bambatha\",\"chief_complaint\":\"...\","
+        "\"symptoms\":[\"fever\"],\"temperature_c\":39.0,\"respiratory_rate\":48,"
+        "\"danger_signs\":[],\"extraction_confidence\":\"high\","
+        "\"human_review_required\":true}}. "
+        "Allowed symptoms: fever, cough, fast_breathing, diarrhoea, dehydration, rash, vomiting. "
+        f"Allowed danger_signs: {', '.join(DANGER_SIGNS.keys())}. "
+        "Use null for unknown numbers and always set human_review_required true."
+    )
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type or "audio/webm",
+                            "data": base64.b64encode(audio_bytes).decode("utf-8"),
+                        }
+                    },
+                ],
+            }
+        ]
+    }
+    req = request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=20) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        if text.startswith("```"):
+            text = text.strip("`").replace("json\n", "", 1).strip()
+        result = json.loads(text)
+        result.setdefault("case", {})
+        result["case"]["human_review_required"] = True
+        result["model"] = model
+        return result
+    except Exception as exc:
+        return {
+            "transcript": "",
+            "case": fallback_extract_from_transcript(""),
+            "model": model,
+            "error": f"Gemini audio extraction failed: {exc}",
+        }
+
+
 def triage_case(case: CaseInput) -> dict[str, Any]:
     matched_danger_signs = [sign for sign in case.danger_signs if sign in DANGER_SIGNS]
     if matched_danger_signs:
@@ -696,6 +768,16 @@ def extract_voice_intake(payload: VoiceExtractRequest) -> dict[str, Any]:
     return {
         "transcript": payload.transcript,
         "case": extracted,
+        "message": "Review and edit before submitting. The CHV remains the final decision-maker.",
+    }
+
+
+@app.post("/api/v1/voice/audio-extract")
+async def extract_voice_audio(file: UploadFile = File(...)) -> dict[str, Any]:
+    audio_bytes = await file.read()
+    result = extract_case_from_audio_with_gemini(audio_bytes, file.content_type or "audio/webm")
+    return {
+        **result,
         "message": "Review and edit before submitting. The CHV remains the final decision-maker.",
     }
 

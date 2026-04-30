@@ -6,6 +6,12 @@ In many rural communities, the first person to see a sick child is not a doctor,
 
 The same intake also becomes a public health signal. As cases sync from the field, district health officers can see live patterns, urgent referrals, and early outbreak alerts across wards.
 
+## Buildathon Result
+
+Sentinel Health placed first in the buildathon.
+
+![Sentinel Health first place leaderboard](docs/assets/buildathon-first-place.png)
+
 ## Why This Matters
 
 Africa’s health systems are powered by frontline workers who carry enormous responsibility with limited infrastructure. Sentinel is designed around that reality:
@@ -19,7 +25,7 @@ This is not an attempt to replace CHVs, nurses, or clinicians. It is a safety an
 ## What The Demo Shows
 
 - A modern React web app for CHV intake and district dashboards.
-- Voice-assisted intake: the CHV speaks naturally, Gemini extracts structured fields, and the CHV reviews before submitting.
+- Voice-assisted intake: the CHV can use browser speech recognition or on-device Whisper transcription, then Gemini extracts structured fields for human review.
 - Form-based intake for low-connectivity or noisy environments.
 - Deterministic danger-sign rules that bypass AI and trigger urgent referral.
 - Gemini-assisted triage for non-critical cases.
@@ -51,7 +57,7 @@ District Dashboard
 
 Google products used:
 
-- **Gemini** for voice-to-structured-intake and triage decision support.
+- **Gemini** for transcript-to-structured-intake and triage decision support.
 - **Secret Manager** for backend-only Gemini key handling.
 - **Cloud Run** for independently deployed frontend and backend services.
 - **BigQuery** for health events, alerts, and district analytics.
@@ -64,7 +70,7 @@ For the buildathon, Gemini was the fastest and most accessible way to demonstrat
 
 Given more time, Sentinel would move toward an on-device-first architecture using MedGemma and Gemma-family models for clinically aligned triage support directly on low-cost Android devices. That future version would prioritize:
 
-- on-device inference where connectivity is unreliable,
+- on-device inference and transcription where connectivity is unreliable,
 - local-language voice intake,
 - multimodal assessment for signs such as malnutrition,
 - offline sync with conflict handling,
@@ -86,7 +92,7 @@ Sentinel keeps the CHV in control:
 ## Demo Flow
 
 1. Open the CHV intake screen.
-2. Record or paste a spoken note, then use Gemini to prefill the form.
+2. Record a spoken note using quick browser voice or on-device Whisper, then use Gemini to prefill the form.
 3. Review the extracted fields as the CHV.
 4. Submit a normal cough/fever case and show AI-supported triage.
 5. Submit a danger-sign case and show immediate urgent referral.

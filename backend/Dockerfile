@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi google-cloud-bigquery "uvicorn[standard]"
+RUN pip install --no-cache-dir fastapi google-cloud-bigquery python-multipart "uvicorn[standard]"
 
 COPY main.py ./
 

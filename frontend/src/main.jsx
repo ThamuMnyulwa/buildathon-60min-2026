@@ -49,6 +49,13 @@ function App() {
   const recognitionRef = useRef(null);
   const listeningRef = useRef(false);
   const finalTranscriptRef = useRef('');
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const transcriberRef = useRef(null);
+  const transcriberModelRef = useRef('');
+  const [isWhisperTranscribing, setIsWhisperTranscribing] = useState(false);
+  const [isRecordingIntake, setIsRecordingIntake] = useState(false);
+  const [isGeminiTranscribing, setIsGeminiTranscribing] = useState(false);
 
   const queuedLabel = useMemo(() => `${pendingCases.length}`, [pendingCases.length]);
 
@@ -88,6 +95,20 @@ function App() {
       else set.add(value);
       return { ...current, [name]: Array.from(set) };
     });
+  }
+
+  function applyExtractedCase(extracted) {
+    setForm((current) => ({
+      ...current,
+      ...extracted,
+      patient_pseudo_id: extracted.patient_pseudo_id || current.patient_pseudo_id,
+      ward: extracted.ward || current.ward,
+      sex: extracted.sex || current.sex,
+      symptoms: Array.isArray(extracted.symptoms) ? extracted.symptoms : current.symptoms,
+      danger_signs: Array.isArray(extracted.danger_signs) ? extracted.danger_signs : current.danger_signs,
+      temperature_c: extracted.temperature_c ?? current.temperature_c,
+      respiratory_rate: extracted.respiratory_rate ?? current.respiratory_rate
+    }));
   }
 
   async function submitCase(event) {
@@ -222,6 +243,129 @@ function App() {
     }
   }
 
+  async function startIntakeRecording() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setVoiceStatus('This browser cannot access the microphone for recording.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        await transcribeAndExtractWithGemini();
+      };
+      recorder.start();
+      setIsRecordingIntake(true);
+      setVoiceStatus('Recording intake. Stop when the caregiver note is complete.');
+    } catch (error) {
+      setVoiceStatus(`Microphone error: ${error.message}`);
+    }
+  }
+
+  function stopIntakeRecording() {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      setIsRecordingIntake(false);
+      mediaRecorderRef.current.stop();
+    }
+  }
+
+  async function transcribeAndExtractWithGemini() {
+    if (audioChunksRef.current.length === 0) {
+      setVoiceStatus('No audio captured for Gemini transcription.');
+      return;
+    }
+
+    setIsGeminiTranscribing(true);
+    setVoiceStatus('Gemini is transcribing audio and extracting fields');
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'intake.webm');
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/v1/voice/audio-extract`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+      setVoiceStatus('Gemini audio fields prefilled - CHV review required');
+      if (result.transcript) setVoiceTranscript(result.transcript);
+      applyExtractedCase(result.case || {});
+    } catch (error) {
+      setVoiceStatus(`Gemini failed, falling back to on-device Whisper: ${error.message}`);
+      await transcribeWithWhisper({ extractAfterTranscription: true });
+    } finally {
+      setIsGeminiTranscribing(false);
+    }
+  }
+
+  async function transcribeWithWhisper({ extractAfterTranscription = false } = {}) {
+    if (audioChunksRef.current.length === 0) {
+      setVoiceStatus('No audio captured for local transcription.');
+      return;
+    }
+
+    setIsWhisperTranscribing(true);
+    setVoiceStatus('Loading on-device Whisper. First run may take a minute.');
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    try {
+      if (!transcriberRef.current) {
+        const { pipeline } = await import('@huggingface/transformers');
+        const hasWebGpu = Boolean(navigator.gpu);
+        const preferredModel = hasWebGpu ? 'onnx-community/whisper-small.en' : 'Xenova/whisper-small.en';
+        const fallbackModel = hasWebGpu ? 'onnx-community/whisper-tiny.en' : 'Xenova/whisper-tiny.en';
+
+        try {
+          setVoiceStatus('Loading higher-accuracy on-device Whisper small model');
+          transcriberRef.current = await pipeline(
+            'automatic-speech-recognition',
+            preferredModel,
+            hasWebGpu ? { device: 'webgpu' } : {}
+          );
+          transcriberModelRef.current = preferredModel;
+        } catch {
+          setVoiceStatus('Whisper small could not load; falling back to tiny model');
+          transcriberRef.current = await pipeline(
+            'automatic-speech-recognition',
+            fallbackModel,
+            hasWebGpu ? { device: 'webgpu' } : {}
+          );
+          transcriberModelRef.current = fallbackModel;
+        }
+      }
+      setVoiceStatus(`Transcribing locally with ${transcriberModelRef.current}`);
+      const output = await transcriberRef.current(audioUrl);
+      const transcript = output.text || '';
+      setVoiceTranscript(transcript);
+      if (extractAfterTranscription && transcript.trim()) {
+        setVoiceStatus('Whisper transcript ready, extracting fields with Gemini');
+        const result = await api('/api/v1/voice/extract', {
+          method: 'POST',
+          body: JSON.stringify({ transcript })
+        });
+        applyExtractedCase(result.case || {});
+        setVoiceStatus(`Fields prefilled from ${transcriberModelRef.current} transcript - CHV review required`);
+      } else {
+        setVoiceStatus(`Local transcript ready from ${transcriberModelRef.current} - review, then prefill`);
+      }
+    } catch (error) {
+      setVoiceStatus(`Local Whisper failed: ${error.message}`);
+    } finally {
+      URL.revokeObjectURL(audioUrl);
+      setIsWhisperTranscribing(false);
+    }
+  }
+
   async function extractVoiceIntake() {
     if (!voiceTranscript.trim()) {
       setVoiceStatus('Record or paste a transcript first');
@@ -234,17 +378,7 @@ function App() {
         body: JSON.stringify({ transcript: voiceTranscript })
       });
       const extracted = result.case || {};
-      setForm((current) => ({
-        ...current,
-        ...extracted,
-        patient_pseudo_id: extracted.patient_pseudo_id || current.patient_pseudo_id,
-        ward: extracted.ward || current.ward,
-        sex: extracted.sex || current.sex,
-        symptoms: Array.isArray(extracted.symptoms) ? extracted.symptoms : current.symptoms,
-        danger_signs: Array.isArray(extracted.danger_signs) ? extracted.danger_signs : current.danger_signs,
-        temperature_c: extracted.temperature_c ?? current.temperature_c,
-        respiratory_rate: extracted.respiratory_rate ?? current.respiratory_rate
-      }));
+      applyExtractedCase(extracted);
       setVoiceStatus('Fields prefilled - CHV review required');
     } catch (error) {
       setVoiceStatus(`Extraction failed: ${error.message}`);
@@ -281,8 +415,13 @@ function App() {
           voiceTranscript={voiceTranscript}
           voiceStatus={voiceStatus}
           isListening={isListening}
+          isWhisperTranscribing={isWhisperTranscribing}
+          isRecordingIntake={isRecordingIntake}
+          isGeminiTranscribing={isGeminiTranscribing}
           setVoiceTranscript={setVoiceTranscript}
           startVoiceIntake={startVoiceIntake}
+          startIntakeRecording={startIntakeRecording}
+          stopIntakeRecording={stopIntakeRecording}
           extractVoiceIntake={extractVoiceIntake}
         />
       )}
@@ -333,8 +472,13 @@ function Intake(props) {
     voiceTranscript,
     voiceStatus,
     isListening,
+    isWhisperTranscribing,
+    isRecordingIntake,
+    isGeminiTranscribing,
     setVoiceTranscript,
     startVoiceIntake,
+    startIntakeRecording,
+    stopIntakeRecording,
     extractVoiceIntake
   } = props;
 
@@ -367,10 +511,22 @@ function Intake(props) {
             </p>
           </div>
           <div className="voice-actions">
-            <button className={isListening ? 'recording' : 'ghost'} onClick={startVoiceIntake} type="button">
-              {isListening ? 'Stop voice' : 'Start voice'}
-            </button>
-            <button className="primary" onClick={extractVoiceIntake} type="button">Prefill with Gemini</button>
+            {!isRecordingIntake && (
+              <button
+                className="primary"
+                onClick={startIntakeRecording}
+                type="button"
+                disabled={isGeminiTranscribing || isWhisperTranscribing}
+              >
+                {isGeminiTranscribing || isWhisperTranscribing ? 'Processing voice...' : 'Record intake'}
+              </button>
+            )}
+            {isRecordingIntake && (
+              <button className="recording" onClick={stopIntakeRecording} type="button">
+                Stop and prefill
+              </button>
+            )}
+            <button className="ghost" onClick={extractVoiceIntake} type="button">Prefill from transcript</button>
           </div>
           <textarea
             value={voiceTranscript}
@@ -411,13 +567,36 @@ function Intake(props) {
   );
 }
 
+function formatLabel(value) {
+  return String(value || 'Unknown').replaceAll('_', ' ');
+}
+
+function countBy(items, key) {
+  return items.reduce((counts, item) => {
+    const value = item[key] || 'Unknown';
+    return { ...counts, [value]: (counts[value] || 0) + 1 };
+  }, {});
+}
+
 function Dashboard({ data, bqStatus, refreshDashboard, triggerCluster }) {
   const summary = data?.summary || {};
+  const cases = data?.cases || [];
+  const alerts = data?.alerts || [];
+  const totalVisibleCases = Math.max(cases.length, 1);
+  const urgencyCounts = countBy(cases, 'urgency');
+  const wardRows = Object.entries(countBy(cases, 'ward')).sort((a, b) => b[1] - a[1]);
+  const syndromeRows = Object.entries(countBy(cases, 'classification')).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxWardCases = Math.max(...wardRows.map(([, count]) => count), 1);
+  const lastRefresh = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   return (
     <section className="fade-up">
       <div className="section-title">
         <p className="eyebrow">Dr Kwame / District Health Officer</p>
         <h2>District Command Dashboard</h2>
+        <p className="muted">
+          A live operating picture: where cases are clustering, how urgent they are, and which alerts need action.
+        </p>
       </div>
 
       <div className="actions">
@@ -432,29 +611,95 @@ function Dashboard({ data, bqStatus, refreshDashboard, triggerCluster }) {
         <Metric label="Data layer" value={bqStatus?.ready ? 'BigQuery' : 'Memory'} />
       </div>
 
-      <div className="grid two dashboard-grid">
+      <div className="dashboard-command">
+        <div className="panel map-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Ward burden</p>
+              <h3>Where pressure is building</h3>
+            </div>
+            <span>Updated {lastRefresh}</span>
+          </div>
+          <div className="ward-grid">
+            {wardRows.length === 0 && <p className="muted">No ward activity yet.</p>}
+            {wardRows.map(([ward, count]) => (
+              <article className="ward-card" key={ward} style={{ '--heat': count / maxWardCases }}>
+                <span>{ward}</span>
+                <strong>{count}</strong>
+                <small>{count === 1 ? 'case' : 'cases'}</small>
+              </article>
+            ))}
+          </div>
+        </div>
+
         <div className="panel">
-          <h3>Active Alerts</h3>
-          {(data?.alerts || []).length === 0 && <p className="muted">No active alerts yet.</p>}
-          {(data?.alerts || []).map((alert) => (
-            <article className="alert" key={alert.id}>
-              <strong>{alert.classification.replaceAll('_', ' ')}</strong>
-              <p>{alert.message}</p>
-              <span>{alert.status} / threshold {alert.threshold}</span>
-            </article>
-          ))}
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Clinical mix</p>
+              <h3>Urgency and syndromes</h3>
+            </div>
+          </div>
+          <div className="urgency-bars">
+            {['RED', 'YELLOW', 'GREEN'].map((urgency) => {
+              const count = urgencyCounts[urgency] || 0;
+              const width = `${Math.round((count / totalVisibleCases) * 100)}%`;
+              return (
+                <div className="bar-row" key={urgency}>
+                  <span>{urgency}</span>
+                  <div className="bar-track">
+                    <i className={urgency.toLowerCase()} style={{ '--bar-width': width }} />
+                  </div>
+                  <b>{count}</b>
+                </div>
+              );
+            })}
+          </div>
+          <div className="syndrome-list">
+            {syndromeRows.length === 0 && <p className="muted">No syndrome mix yet.</p>}
+            {syndromeRows.map(([classification, count]) => (
+              <div className="syndrome-row" key={classification}>
+                <span>{formatLabel(classification)}</span>
+                <strong>{count}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid two dashboard-grid">
+        <div className="panel outbreak-panel">
+          <h3>Outbreak Watch</h3>
+          {alerts.length === 0 && <p className="muted">No active alerts yet. Trigger the demo cluster to show threshold detection.</p>}
+          {alerts.map((alert) => {
+            const progress = Math.min(100, Math.round(((alert.case_count || 0) / Math.max(alert.threshold || 1, 1)) * 100));
+            return (
+              <article className="alert" key={alert.id}>
+                <div className="alert-topline">
+                  <strong>{formatLabel(alert.classification)}</strong>
+                  <b>{alert.status}</b>
+                </div>
+                <p>{alert.message}</p>
+                <div className="alert-progress">
+                  <i style={{ '--bar-width': `${progress}%` }} />
+                </div>
+                <span>
+                  {alert.ward} / {alert.case_count} of {alert.threshold} threshold / {alert.window_hours}h window
+                </span>
+              </article>
+            );
+          })}
         </div>
 
         <div className="panel">
           <h3>Latest Cases</h3>
           <div className="case-list">
-            {(data?.cases || []).map((item) => (
+            {cases.map((item) => (
               <article className="case-row" key={item.id}>
                 <div>
-                  <strong>{item.classification.replaceAll('_', ' ')}</strong>
-                  <span>{item.ward} / {item.age_months} months</span>
+                  <strong>{formatLabel(item.classification)}</strong>
+                  <span>{item.ward} / {item.age_months} months / {item.chv_name}</span>
                 </div>
-                <b className={`pill ${item.urgency.toLowerCase()}`}>{item.urgency}</b>
+                <b className={`pill ${(item.urgency || 'pending').toLowerCase()}`}>{item.urgency}</b>
               </article>
             ))}
           </div>
