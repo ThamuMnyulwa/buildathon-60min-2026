@@ -1,0 +1,72 @@
+[
+  {
+    "client_case_id": "seed-bambatha-pneumonia-001",
+    "chv_name": "Aisha",
+    "ward": "Bambatha",
+    "patient_pseudo_id": "seed-child-001",
+    "age_months": 24,
+    "sex": "F",
+    "chief_complaint": "cough and fever",
+    "symptoms": ["fever", "cough", "fast_breathing"],
+    "temperature_c": 38.7,
+    "respiratory_rate": 48,
+    "danger_signs": [],
+    "captured_offline": false
+  },
+  {
+    "client_case_id": "seed-kijani-referral-001",
+    "chv_name": "Miriam",
+    "ward": "Kijani",
+    "patient_pseudo_id": "seed-child-002",
+    "age_months": 18,
+    "sex": "M",
+    "chief_complaint": "convulsions and fever",
+    "symptoms": ["fever"],
+    "temperature_c": 39.3,
+    "respiratory_rate": 44,
+    "danger_signs": ["convulsions"],
+    "captured_offline": false
+  },
+  {
+    "client_case_id": "seed-bambatha-diarrhoea-001",
+    "chv_name": "Aisha",
+    "ward": "Bambatha",
+    "patient_pseudo_id": "seed-child-003",
+    "age_months": 30,
+    "sex": "F",
+    "chief_complaint": "diarrhoea",
+    "symptoms": ["diarrhoea", "dehydration"],
+    "temperature_c": 37.9,
+    "respiratory_rate": 34,
+    "danger_signs": [],
+    "captured_offline": true
+  },
+  {
+    "client_case_id": "seed-bambatha-diarrhoea-002",
+    "chv_name": "Aisha",
+    "ward": "Bambatha",
+    "patient_pseudo_id": "seed-child-004",
+    "age_months": 20,
+    "sex": "M",
+    "chief_complaint": "watery diarrhoea",
+    "symptoms": ["diarrhoea"],
+    "temperature_c": 37.5,
+    "respiratory_rate": 30,
+    "danger_signs": [],
+    "captured_offline": false
+  },
+  {
+    "client_case_id": "seed-bambatha-diarrhoea-003",
+    "chv_name": "Joseph",
+    "ward": "Bambatha",
+    "patient_pseudo_id": "seed-child-005",
+    "age_months": 36,
+    "sex": "F",
+    "chief_complaint": "diarrhoea and vomiting",
+    "symptoms": ["diarrhoea", "vomiting"],
+    "temperature_c": 38.1,
+    "respiratory_rate": 32,
+    "danger_signs": [],
+    "captured_offline": false
+  }
+]

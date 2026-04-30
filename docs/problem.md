@@ -1,0 +1,4 @@
+AI for Health
+The Context: As 2026, a child with acute malaria or pneumonia in a rural district can die within 24 hours if not treated. The Ministry of Health relies on Community Health Volunteers to diagnose illnesses as well as inform individuals of disease outbreaks which is often a slow process.
+The Goal: Build a prototype for an AI-Enabled tool that simplifies diagnostics based on symptoms recorded by Community Health Volunteer and  uses computer vision to detect malnutrition, or provides real-time "outbreak alerts" to district officials.
+The Tools : Google AI Studio, Gemini, Vertex AI, Vision API
